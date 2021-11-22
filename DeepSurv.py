@@ -36,40 +36,61 @@ logger.addHandler(file_handler)
 class DeepSurv:
 
     def __init__(self, df, label, event, elements=[16, 8], activation = ['relu', 'tanh'], X_col=None):
-
+        # 采样
         self.df = df.sample(frac=1.0)
         y_col = [label, event]
         self.y_col = y_col
         # self.Y = df.get(y_col)
         label = np.array(df[label])
         event = np.array(df[event])
+
+        # 输出时间从小到大的数据索引，再反转是从"大到小"
         sort_idx = np.argsort(label)[::-1]
+
         if X_col != None:
             X = np.array(df[X_col]).astype("float64")
         else:
             X = np.array(df.drop(y_col, axis=1).astype("float64"))
+
+        # 将X按照时间从"大到小"排列
         self.X = X[sort_idx]
         self.label = label[sort_idx]
         self.event = event[sort_idx]
+        # model
         self.model = self.nn_struct(elements, activation)
         self.get_survival_func_flag = 0
 
 
     def nn_struct(self, elements, activation):
+
+        # 输入：特征的纬度
         input = tf.keras.layers.Input([len(self.X[0]), ], name='input_X')
-        event = tf.keras.layers.Input([1, ], name='input_event')
 
         # inputs_event = tf.keras.layers.Input([1, ], name="input_event")
         # initializer = tf.keras.initializers.he_normal()
         # acti = tf.keras.layers.LeakyReLU(alpha=0.1)
+
+        # bn：输入接个bn
         inputs = tf.keras.layers.BatchNormalization()(input)
+
+        # NN：再接个全链接+激活函数
         inputs = Dense(elements[0], activation=activation[0])(inputs)
+
+        # bn+NN+dropout
         for (i, j) in zip(elements[1:], activation[1:]):
             inputs = tf.keras.layers.BatchNormalization()(inputs)
             inputs = Dense(i, activation=j)(inputs)
             inputs = tf.keras.layers.Dropout(0.1)(inputs)
+
+        # 输出层：神经元个数为1
         outputs = Dense(1, "linear")(inputs)
+
+        # bn
         output = tf.keras.layers.BatchNormalization()(outputs)
+
+        # event 为 0/1（注意这个loss对应的是event,是0/1）
+        event = tf.keras.layers.Input([1, ], name='input_event')
+        # loss
         my_loss = Total_Loss()([output, event])
 
         model = tf.keras.models.Model(inputs=[input, event],
@@ -137,19 +158,46 @@ class DeepSurv:
 
 
     def predict_score(self, X):
+        '''
+        对每个样本的每个时间点进行预测
+        :param X:
+        :return:
+        '''
         event = np.zeros(X.shape[0],)
-        result = self.model.predict((X,event))
+        # result:
+        # [array([[ 0.43803766],
+        #        [ 0.26039365],
+        #        [-1.2852459 ],
+        #        ...,
+        #        [ 0.80954874],
+        #        [ 0.03981104],
+        #        [ 0.34819457]], dtype=float32), array([-0., -0., -0., -0., -0., -0., -0., -0., -0., -0., -0., -0., -0.,
+        #        -0., -0., -0., -0., -0., -0., -0., -0., -0., -0., -0., -0., -0.,
+        #        -0., -0., -0., -0., -0., -0.], dtype=float32)]
+        result = self.model.predict((X, event))
         result = result[0]
-        # print(result)
         return result
 
     def concordance_eval(self, X = None, event_times = None, event_observed = None):
+        '''
+
+        :param X:
+        :param event_times: label 时间点
+        :param event_observed: event 0/1
+        :return:
+        '''
         if(type(event_times) == type(None) and type(X) == type(None) and type(event_observed) == type(None)):
+            # [148 133 124 ...   0   0   0]
             event_times = self.label
+            # [[-0.31124225]
+            #  [-0.2317419 ]
+            #  [ 0.7037956 ]
             predicted_scores = -(self.predict_score(self.X))
+            # [0 0 0 ... 0 1 0]
             event_observed = self.event
         else:
             predicted_scores = -(self.predict_score(X))
+
         index = concordance_index(event_times, predicted_scores, event_observed)
         print("concordance index value is: ", index)
         logger.info('concordance index is {}'.format(index))
@@ -212,16 +260,28 @@ class DeepSurv:
 '''
 
 class Total_Loss(tf.keras.layers.Layer):
+
     def __init__(self, **kwargs):
         # self.alpha = alpha
         # self.beta = beta
         super(Total_Loss, self).__init__(**kwargs)
 
     def call(self, inputs, **kwargs):
-        y_pred, event= inputs
+        # 计算损失函数
+
+        # 预测0/1 与 真实 的0/1
+        y_pred, event = inputs
+
+        # e(p)
         partial_hazard = tf.math.exp(y_pred)
+
+        # log(#（e(p)）)
         log_cum_partial_hazard = tf.math.log(tf.math.cumsum(partial_hazard))
+
+        #  (p - log(#（e(p)）)) * y
         event_likelihood = (y_pred - log_cum_partial_hazard) * event
+
+        # - # (p - log(#（e(p)）)) * y
         neg_likelihood = -1.0 * tf.reduce_sum(event_likelihood)
 
         self.add_loss(neg_likelihood, inputs=True)

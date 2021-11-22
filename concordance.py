@@ -115,12 +115,15 @@ class _BTree:
 # The code is based on https://github.com/CamDavidsonPilon/lifelines/blob/master/lifelines/utils/concordance.py
 def concordance_index(event_times, predicted_scores, event_observed=None):
     """
+    评估
     code:: python
         from lifelines.utils import concordance_index
         cph = CoxPHFitter().fit(df, 'T', 'E')
         concordance_index(df['T'], -cph.predict_partial_hazard(df), df['E'])
     """
+    # 格式转换
     event_times, predicted_scores, event_observed = _preprocess_scoring_data(event_times, predicted_scores, event_observed)
+    #
     num_correct, num_tied, num_pairs = _concordance_summary_statistics(event_times, predicted_scores, event_observed)
 
     return _concordance_ratio(num_correct, num_tied, num_pairs)
@@ -135,6 +138,9 @@ def _concordance_ratio(num_correct: int, num_tied: int, num_pairs: int) -> float
 def _concordance_summary_statistics(event_times, predicted_event_times, event_observed):  # pylint: disable=too-many-locals
     """Find the concordance index in n * log(n) time.
     Assumes the data has been verified by lifelines.utils.concordance_index first.
+    计算concordance：
+    C-index的计算方法是把所研究的资料中的所有研究对象随机地两两组成对子，
+    以生存分析为例,两个病人如果生存时间较长的一位其预测生存时间长于另一位,或预测的生存概率高的一位的生存时间长于另一位,则称之为预测结果与实际结果相符，称之为一致。
     """
     # Here's how this works.
     #
@@ -170,6 +176,7 @@ def _concordance_summary_statistics(event_times, predicted_event_times, event_ob
     # are comparable all the observations that died at the same time or previously). However, we do
     # NOT add them to the pool at the end, because they are NOT comparable with any observations
     # that leave the study afterward--whether or not those observations get censored.
+
     if np.logical_not(event_observed).all():
         return (0, 0, 0)
 
@@ -244,6 +251,13 @@ def _handle_pairs(truth, pred, first_ix, times_to_compare):
 
 
 def _preprocess_scoring_data(event_times, predicted_scores, event_observed):
+    '''
+    格式转换
+    :param event_times: 时间点
+    :param predicted_scores: 预测的生存（貌似-）
+    :param event_observed: 真实label
+    :return:
+    '''
     event_times = np.asarray(event_times, dtype=float)
     predicted_scores = np.asarray(predicted_scores, dtype=float)
 

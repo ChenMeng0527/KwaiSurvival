@@ -48,6 +48,7 @@ class DeepHit:
         else:
             self.X = np.array(self.df.drop(y_col, axis=1).astype("float64"))
 
+        # 最大日期+2
         global MAX_MAT_COL
         MAX_MAT_COL = int(np.max(self.label) + 2)
         self.MAX_MAT_COL = MAX_MAT_COL
@@ -55,25 +56,43 @@ class DeepHit:
         self.model = self.nn_struct(elements_1, elements_2, activation_1, activation_2)
 
     def nn_struct(self, elements_1, elements_2 , activation_1, activation_2, type1_loss = 20.0, type2_loss = 1.0):
+        '''
+
+        :param elements_1:
+        :param elements_2:
+        :param activation_1:
+        :param activation_2:
+        :param type1_loss:
+        :param type2_loss:
+        :return:
+        '''
+        # 输入 X 纬度
         inputs = tf.keras.layers.Input([len(self.X[0]), ], name='input_X')
-        inputs_label = tf.keras.layers.Input([1, ], name="input_label")
+
+        # 两个mat长度
         inputs_nllmat = tf.keras.layers.Input([self.MAX_MAT_COL, ], name="input_nllmat")
         inputs_rankmat = tf.keras.layers.Input([self.MAX_MAT_COL, ], name="input_rankmat")
+
+        #
+        inputs_label = tf.keras.layers.Input([1, ], name="input_label")
         inputs_event = tf.keras.layers.Input([1, ], name="input_event")
 
+        # 1：输入接全链接
         # share_h1 = tf.keras.layers.Dense(len(self.X[0]), )(inputs)
         # share_h1 = tf.keras.layers.BatchNormalization()(share_h1)
         share_h2 = tf.keras.layers.Dense(elements_1 [0], activation=activation_1[0], activity_regularizer="l2")(inputs)
 
+        # 2：BN + 全链接
         for (i, j) in zip(elements_1[1:], activation_1[1:]):
             share_h2 = tf.keras.layers.BatchNormalization()(share_h2)
             share_h2 = tf.keras.layers.Dense(i, activation=j, activity_regularizer="l2")(share_h2)
             # share_h2 = tf.keras.layers.Dense(i, activation='tanh', activity_regularizer="l2")(share_h2)
 
-
+        # 3：将 "输入" 拼接起来
         hid = tf.keras.layers.concatenate([inputs, share_h2], axis=1)
+        # 4：全链接
         output = tf.keras.layers.Dense(elements_2[0], activation=activation_2[0])(hid)
-
+        # 5：BN+全链接
         for (i, j) in zip(elements_2[1:], activation_2):
             output = tf.keras.layers.BatchNormalization()(output)
             output = tf.keras.layers.Dense(i, activation=j)(output)
@@ -99,6 +118,8 @@ class DeepHit:
         #                                    )
         # output = tf.keras.layers.BatchNormalization()(output)
         # -----------------------------------------------------------------------------------------------
+
+        # BN+全链接，输出为softmax，个数为 MAX_MAT_COL
         output = tf.keras.layers.BatchNormalization()(output)
         outputs = tf.keras.layers.Dense(self.MAX_MAT_COL, activation='softmax', activity_regularizer="l2", name='output')(output)
         # tf.print(outputs.shape)
@@ -144,7 +165,10 @@ class DeepHit:
 
     def get_traindata(self):
         def map_fn(X, label, nll_mat, rank_mat, event):
-            inputs = {"input_X": X, "input_label": label, "input_nllmat": nll_mat, "input_rankmat": rank_mat,
+            inputs = {"input_X": X,
+                      "input_label": label,
+                      "input_nllmat": nll_mat,
+                      "input_rankmat": rank_mat,
                       "input_event": event}
             targets = {}
             return inputs, targets
@@ -160,9 +184,18 @@ class DeepHit:
         return dataset
 
     def get_matrix(self, label = None):
+        '''
+        deephit里面的输入两个矩阵
+        :param label:
+        :return:
+        '''
         if type(label) == type(None):
             label = self.label
         rows = len(label)
+
+        # mat 矩阵 （事件发生该位置为1，否则后面为1）
+        # 对于每行数据，如果label=1,则该时间点位置为1
+        #             如果label=0,则该时间点后一位开始都为1
         mat = np.zeros([rows, MAX_MAT_COL])
         for i in range(rows):
             if self.event[i] != 0:
@@ -171,7 +204,8 @@ class DeepHit:
                 mat[i, int(self.label[i]) + 1:] = 1
         mat_tensor = (tf.convert_to_tensor(mat))
 
-        ##
+        # rank 矩阵 （时间点不管是否发生，之前为1，包括该点）
+        # 对于每行数据，该时间点前都为1（包含该节点）
         rank_rows = len(label)
         rank_mat = np.zeros([rank_rows, MAX_MAT_COL])
         for i in range(rank_rows):
