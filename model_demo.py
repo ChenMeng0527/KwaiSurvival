@@ -17,10 +17,10 @@ event = 'Event'
 
 
 # 初始化 - 第一个模型 DeepSurv
-# ds = DeepSurv(df, label, event)
+ds = DeepSurv(df, label, event)
 
 # # 初始化 - 第二个模型 DeepHit
-ds = DeepHit(df,label, event)
+# ds = DeepHit(df,label, event)
 #
 # # 初始化 - 第三个模型 DeepMultiTasks
 # dm = DeepMultiTasks(df,label, event)

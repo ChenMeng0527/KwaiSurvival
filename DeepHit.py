@@ -273,6 +273,12 @@ class Total_Loss(tf.keras.layers.Layer):
         return dict(list(base_config.items()) + list(config.items())  )
 
     def call(self, inputs, **kwargs):
+
+        # mat 矩阵 （事件发生该位置为1，否则后面为1）
+        # 对于每行数据，如果label=1,则该时间点位置为1
+        #             如果label=0,则该时间点后一位开始都为1
+        # rank 矩阵 （时间点不管是否发生，之前为1，包括该点）
+        # 对于每行数据，该时间点前都为1（包含该节点）
         y_true, nll_mat, rank_mat, event, y_pred = inputs
         # if sum(sum(np.isnan(nll_mat)))!=0:
         #    print("break")
