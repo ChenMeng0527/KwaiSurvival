@@ -41,6 +41,8 @@ class DeepSurv:
         y_col = [label, event]
         self.y_col = y_col
         # self.Y = df.get(y_col)
+        # label:time
+        # event: 0/1
         label = np.array(df[label])
         event = np.array(df[event])
 

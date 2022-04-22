@@ -8,7 +8,7 @@ import pandas as pd
 import seaborn as seb
 
 #读取数据
-data  = pd.read_csv("day.csv")
+data  = pd.read_csv("/Users/youshu_/Python_Workspace/KwaiSurvival-Test-Demo/Survival_Poisson_Regression/day.csv")
 #查看前五行数据
 #print(data.head())
 #print(data.info())
